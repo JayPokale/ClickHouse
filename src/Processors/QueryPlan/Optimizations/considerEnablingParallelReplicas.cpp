@@ -811,12 +811,16 @@ namespace QueryPlanOptimizations
 {
 
 /// The key under which an execution remembers its boundary: the single-replica plan's root hash, with the settings
-/// that can move where the replicas' half ends without changing that plan.
+/// that can move where the replicas' half ends without changing that plan. None with
+/// `automatic_parallel_replicas_remember_boundary` off, so that every query builds the replicas plan and nothing is
+/// remembered.
 static std::optional<UInt64> rememberedBoundaryKey(
     const QueryPlan::Node & root,
     const std::unordered_map<const QueryPlan::Node *, UInt64> & nopr_node_hashes,
     const QueryPlanOptimizationSettings & optimization_settings)
 {
+    if (!optimization_settings.automatic_parallel_replicas_remember_boundary)
+        return std::nullopt;
     const auto root_hash_it = nopr_node_hashes.find(&root);
     if (root_hash_it == nopr_node_hashes.end())
         return std::nullopt;
