@@ -276,9 +276,20 @@ void FormatFilterInfo::initKeyConditionOnce(const Block & keys)
                     names.push_back(col.name);
 
                 ActionsDAGWithInversionPushDown inverted_dag(filter_actions_dag->getOutputs().front(), ctx, /* boolean_context */ true);
-                key_condition = std::make_shared<const KeyCondition>(
+                auto condition = std::make_shared<KeyCondition>(
                     inverted_dag, ctx, names,
                     std::make_shared<ExpressionActions>(ActionsDAG(columns)));
+
+                /// The min/max statistics of a row group or page leave out NaN, like the ranges that MergeTree
+                /// takes from `getExtremes`, so a NaN can satisfy a comparison such as `NOT (x < c)` in a row
+                /// group whose range doesn't. Relax the atoms over such columns, as the MergeTree indexes do.
+                DataTypes types;
+                types.reserve(columns.size());
+                for (const auto & col : columns)
+                    types.push_back(col.type);
+                condition->relaxAtomsOverNaNHidingColumns(types);
+
+                key_condition = std::move(condition);
             }
             catch (...)
             {
